@@ -77,6 +77,9 @@ class ResourceBase : public core::RefCounted {
  public:
   // Returns a debug string for *this.
   virtual string DebugString() = 0;
+
+  // Returns memory used by this resource.
+  virtual int64 MemoryUsed() const { return 0; };
 };
 
 // Container used for per-step resources.
@@ -208,6 +211,8 @@ ResourceHandle MakePerStepResourceHandle(OpKernelContext* ctx,
 
 // Returns a resource handle from a numbered op input.
 ResourceHandle HandleFromInput(OpKernelContext* ctx, int input);
+Status HandleFromInput(OpKernelContext* ctx, StringPiece input,
+                       ResourceHandle* handle);
 
 // Create a resource pointed by a given resource handle.
 template <typename T>

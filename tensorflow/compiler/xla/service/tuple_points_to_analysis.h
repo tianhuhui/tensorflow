@@ -34,6 +34,7 @@ limitations under the License.
 #include "tensorflow/core/lib/core/status.h"
 #include "tensorflow/core/lib/gtl/array_slice.h"
 #include "tensorflow/core/lib/gtl/flatmap.h"
+#include "tensorflow/core/lib/gtl/flatset.h"
 #include "tensorflow/core/platform/macros.h"
 #include "tensorflow/core/platform/types.h"
 
@@ -65,7 +66,7 @@ class PointsToSet : public ShapeTree<std::vector<const LogicalBuffer*>> {
 
   // Creates a set containing the union of all LogicalBuffers contained in the
   // PointsToSet.
-  std::set<const LogicalBuffer*> CreateFlattenedSet() const;
+  tensorflow::gtl::FlatSet<const LogicalBuffer*> CreateFlattenedSet() const;
 
   // Returns true if the given buffer is in the points-to set at the given
   // index.
@@ -147,12 +148,9 @@ std::ostream& operator<<(std::ostream& out, const BufferAlias& buffer_alias);
 // the potential sources of each buffer in each instruction's output.
 class TuplePointsToAnalysis : public DfsHloVisitorWithDefault {
  public:
-  // Runs points-to analysis on 'module'. If 'include_loop_fusion_instructions'
-  // is true, includes fused instructions from each loop fusion instruction
-  // in 'module' in the points-to analysis.
+  // Runs points-to analysis on 'module'.
   static StatusOr<std::unique_ptr<TuplePointsToAnalysis>> Run(
-      const HloModule* module,
-      const bool include_loop_fusion_instructions = false);
+      const HloModule* module);
 
   // Return the points-to set of an instruction. This describes the potential
   // sources of each buffer in the instruction's output.
@@ -217,10 +215,7 @@ class TuplePointsToAnalysis : public DfsHloVisitorWithDefault {
   string ToString() const;
 
  private:
-  explicit TuplePointsToAnalysis(const HloModule* module,
-                                 const bool include_loop_fusion_instructions)
-      : module_(module),
-        include_loop_fusion_instructions_(include_loop_fusion_instructions) {}
+  explicit TuplePointsToAnalysis(const HloModule* module) : module_(module) {}
 
   // Perform the analysis. Should be called immediately after constructing the
   // object and before calling GetPointsToSet.
@@ -259,9 +254,6 @@ class TuplePointsToAnalysis : public DfsHloVisitorWithDefault {
 
   // The module this analysis is performed on.
   const HloModule* module_;
-
-  // Whether to run points-to analysis on loop fusion instructions in 'module_'.
-  const bool include_loop_fusion_instructions_;
 
   // A map containing a PointsToSet for every HLO instruction.
   tensorflow::gtl::FlatMap<const HloInstruction*, std::unique_ptr<PointsToSet>>

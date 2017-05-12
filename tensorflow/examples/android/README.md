@@ -10,9 +10,12 @@ TensorFlow in mobile applications.
 
 Inference is done using the [TensorFlow Android Inference Interface](../../../tensorflow/contrib/android),
 which may be built separately if you want a standalone library to drop into your
-existing application.
+existing application. Object tracking and YUV -> RGB conversion is handled by
+libtensorflow_demo.so.
 
-A device running Android 5.0 (API 21) or higher is required to run the demo.
+A device running Android 5.0 (API 21) or higher is required to run the demo due
+to the use of the camera2 API, although the native libraries themselves can run
+on API >= 14 devices.
 
 ## Current samples:
 
@@ -25,20 +28,18 @@ A device running Android 5.0 (API 21) or higher is required to run the demo.
         using Deep Neural Networks](https://arxiv.org/abs/1312.2249) to
         localize and track people in the camera preview in real-time.
 3. [TF Stylize](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/examples/android/src/org/tensorflow/demo/StylizeActivity.java):
-        Uses a model based on [A Learned Representation For Artistic Style]
-        (https://arxiv.org/abs/1610.07629) to restyle the camera preview image
-        to that of a number of different artists.
+        Uses a model based on [A Learned Representation For Artistic
+        Style](https://arxiv.org/abs/1610.07629) to restyle the camera preview 
+        image to that of a number of different artists.
 
-<img src="sample_images/classify1.jpg" width="33%">
-<img src="sample_images/stylize1.jpg" width="33%">
-<img src="sample_images/detect1.jpg" width="33%">
+<img src="sample_images/classify1.jpg" width="30%"><img src="sample_images/stylize1.jpg" width="30%"><img src="sample_images/detect1.jpg" width="30%">
 
 ## Prebuilt APK:
 
 If you just want the fastest path to trying the demo, you may download the
 nightly build
 [here](https://ci.tensorflow.org/view/Nightly/job/nightly-android/). Expand the
-"View" and then the "out" folders under "Last Successful Artifacts to find
+"View" and then the "out" folders under "Last Successful Artifacts" to find
 tensorflow_demo.apk. Also available are precompiled native libraries that you
 may drop into your own applications. See
 [tensorflow/contrib/android/README.md](../../../tensorflow/contrib/android/README.md)
@@ -69,12 +70,18 @@ protobuf compilation.
 
 ### Bazel
 
+NOTE: Bazel does not currently support building for Android on Windows. Full
+support for gradle/cmake builds is coming soon, but in the meantime we suggest
+that Windows users download the
+[prebuilt binaries](https://ci.tensorflow.org/view/Nightly/job/nightly-android/)
+instead.
+
 ##### Install Bazel and Android Prerequisites
 
 Bazel is the primary build system for TensorFlow. To build with Bazel,
 it and the Android NDK and SDK must be installed on your system.
 
-1. Get the recommended Bazel version listed in [os_setup.html](https://www.tensorflow.org/versions/master/get_started/os_setup.html#source)
+1. Install the latest version of Bazel as per the instructions [on the Bazel website](https://bazel.build/versions/master/docs/install.html).
 2. The Android NDK is required to build the native (C/C++) TensorFlow code.
         The current recommended version is 12b, which may be found
         [here](https://developer.android.com/ndk/downloads/older_releases.html#ndk-12b-downloads).
@@ -82,11 +89,12 @@ it and the Android NDK and SDK must be installed on your system.
         [here](https://developer.android.com/tools/revisions/build-tools.html),
         or alternatively as part of
         [Android Studio](https://developer.android.com/studio/index.html). Build
-        tools API >= 23 is required to build the TF Android demo.
+        tools API >= 23 is required to build the TF Android demo (though it will
+        run on API >= 21 devices).
 
 ##### Edit WORKSPACE
 
-The Android entries in [`<workspace_root>/WORKSPACE`](../../../WORKSPACE#L2-L13)
+The Android entries in [`<workspace_root>/WORKSPACE`](../../../WORKSPACE#L19-L32)
 must be uncommented with the paths filled in appropriately depending on where
 you installed the NDK and SDK. Otherwise an error such as:
 "The external label '//external:android/sdk' is not bound to anything" will
@@ -95,19 +103,19 @@ be reported.
 Also edit the API levels for the SDK in WORKSPACE to the highest level you
 have installed in your SDK. This must be >= 23 (this is completely independent
 of the API level of the demo, which is defined in AndroidManifest.xml).
-The NDK API level may remain at 21.
+The NDK API level may remain at 14.
 
 ##### Install Model Files (optional)
 
 The TensorFlow `GraphDef`s that contain the model definitions and weights
 are not packaged in the repo because of their size. They are downloaded
 automatically and packaged with the APK by Bazel via a new_http_archive defined
-in `WORKSPACE` during the build process.
+in `WORKSPACE` during the build process, and by Gradle via download-models.gradle.
 
-**Optional**: If you wish to place the models in your assets manually (E.g. for
-non-Bazel builds), remove all of the `model_files` entries from the `assets`
+**Optional**: If you wish to place the models in your assets manually,
+remove all of the `model_files` entries from the `assets`
 list in `tensorflow_demo` found in the `[BUILD](BUILD)` file. Then download
-and extract the archives yourself to the `assets` directory in thesource tree:
+and extract the archives yourself to the `assets` directory in the source tree:
 
 ```bash
 BASE_URL=https://storage.googleapis.com/download.tensorflow.org/models
@@ -120,6 +128,10 @@ done
 
 This will extract the models and their associated metadata files to the local
 assets/ directory.
+
+If you are using Gradle, make sure to remove download-models.gradle reference
+from build.gradle after your manually download models; otherwise gradle
+might download models again and overwrite your models.
 
 ##### Build
 
