@@ -30,12 +30,14 @@ limitations under the License.
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/test.h"
 #include "tensorflow/compiler/xla/test_helpers.h"
+#include "tensorflow/compiler/xla/tests/hlo_test_base.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/core/platform/logging.h"
 
 namespace xla {
+namespace {
 
-class TransposeFoldingTest : public ::testing::Test {
+class TransposeFoldingTest : public HloTestBase {
  protected:
   void FoldTranspose(HloModule* module) {
     TransposeFolding transpose_folding(
@@ -92,11 +94,11 @@ TEST_F(TransposeFoldingTest, FoldDotTransposeConstant) {
   auto builder = HloComputation::Builder("entry_computation");
   // 2x1
   HloInstruction* const0 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR2<float>({{1}, {2}})));
+      HloInstruction::CreateConstant(Literal::CreateR2<float>({{1}, {2}})));
   // 3x2
   HloInstruction* const1 =
       builder.AddInstruction(HloInstruction::CreateConstant(
-          LiteralUtil::CreateR2<float>({{1, 2}, {3, 4}, {5, 6}})));
+          Literal::CreateR2<float>({{1, 2}, {3, 4}, {5, 6}})));
   HloInstruction* transpose0 =
       builder.AddInstruction(HloInstruction::CreateTranspose(
           ShapeUtil::MakeShape(F32, {1, 2}), const0, {1, 0}));
@@ -130,11 +132,11 @@ TEST_F(TransposeFoldingTest, FuseDotWithConstantOperands) {
   auto builder = HloComputation::Builder("entry");
   // (1.0 + 2.0) * (2.0 - 3.0)
   HloInstruction* const1 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(1.0)));
+      HloInstruction::CreateConstant(Literal::CreateR0<float>(1.0)));
   HloInstruction* const2 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(2.0)));
+      HloInstruction::CreateConstant(Literal::CreateR0<float>(2.0)));
   HloInstruction* const3 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(3.0)));
+      HloInstruction::CreateConstant(Literal::CreateR0<float>(3.0)));
   HloInstruction* add = builder.AddInstruction(HloInstruction::CreateBinary(
       const1->shape(), HloOpcode::kAdd, const1, const2));
   HloInstruction* sub = builder.AddInstruction(HloInstruction::CreateBinary(
@@ -365,4 +367,5 @@ TEST_F(TransposeFoldingTest, FoldConvTransposeLhs) {
       << "entry_computation should contain exactly 4 instructions.";
 }
 
+}  // namespace
 }  // namespace xla

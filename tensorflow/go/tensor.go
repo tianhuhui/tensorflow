@@ -100,7 +100,7 @@ func NewTensor(value interface{}) (*Tensor, error) {
 		}
 	} else {
 		e := stringEncoder{offsets: buf, data: raw[nflattened*8 : len(raw)], status: newStatus()}
-		if e.encode(reflect.ValueOf(value)); err != nil {
+		if err := e.encode(reflect.ValueOf(value)); err != nil {
 			return nil, err
 		}
 		if int64(buf.Len()) != nflattened*8 {
@@ -227,6 +227,7 @@ var types = []struct {
 	{reflect.TypeOf(uint16(0)), C.TF_UINT16},
 	{reflect.TypeOf(complex(float64(0), float64(0))), C.TF_COMPLEX128},
 	// TODO(apassos): support DT_RESOURCE representation in go.
+	// TODO(keveman): support DT_VARIANT representation in go.
 }
 
 // shapeAndDataTypeOf returns the data type and shape of the Tensor
@@ -270,7 +271,7 @@ func typeOf(dt DataType, shape []int64) reflect.Type {
 	if ret == nil {
 		panic(bug("DataType %v is not supported", dt))
 	}
-	for _ = range shape {
+	for range shape {
 		ret = reflect.SliceOf(ret)
 	}
 	return ret

@@ -27,8 +27,10 @@
 @@PowerTransform
 @@Sigmoid
 @@SigmoidCentered
+@@SinhArcsinh
 @@SoftmaxCentered
 @@Softplus
+@@Weibull
 """
 
 from __future__ import absolute_import
@@ -48,6 +50,7 @@ from tensorflow.contrib.distributions.python.ops.bijectors.invert import *
 from tensorflow.contrib.distributions.python.ops.bijectors.power_transform import *
 from tensorflow.contrib.distributions.python.ops.bijectors.sigmoid import *
 from tensorflow.contrib.distributions.python.ops.bijectors.sigmoid_centered import *
+from tensorflow.contrib.distributions.python.ops.bijectors.sinh_arcsinh import *
 from tensorflow.contrib.distributions.python.ops.bijectors.softmax_centered import *
 from tensorflow.contrib.distributions.python.ops.bijectors.softplus import *
 from tensorflow.python.ops.distributions.bijector import *

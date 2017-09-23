@@ -37,8 +37,8 @@ limitations under the License.
 #include "tensorflow/core/util/tensor_format.h"
 
 #include "tensorflow/core/util/mkl_util.h"
-#include "third_party/mkl/include/mkl_dnn.h"
-#include "third_party/mkl/include/mkl_dnn_types.h"
+#include "mkl_dnn.h"
+#include "mkl_dnn_types.h"
 
 namespace tensorflow {
 
@@ -165,8 +165,11 @@ class MklConv2DOp : public OpKernel {
 
     // If there is nothing to compute, return.
     if (out_shape.num_elements() == 0) {
-      // TODO(jbobba): Verify correctness here
-      //               Need semantics for Null MKL tensor
+      // Nothing to do, allocate output tensor and return
+      MklShape mkl_output_mkl_shape;
+      mkl_output_mkl_shape.SetMklTensor(false);
+      AllocateOutputSetMklShape(context, 0, &output, input.shape(),
+                                mkl_output_mkl_shape);
       return;
     }
 
@@ -262,15 +265,38 @@ class MklConv2DOp : public OpKernel {
         sizeof(T));
     AllocateOutputSetMklShape(context, 0, &output, mkl_output_tf_shape,
                               mkl_output_mkl_shape);
+    // Filter output to be used in the backprop_input
+    TensorShape mkl_filter_output_tf_shape;
+    MklShape mkl_filter_output_mkl_shape;
+    mkl_filter_output_mkl_shape.SetMklTensor(true);
+    mkl_filter_output_mkl_shape.SetMklLayout(mkl_context.prim_fwd,
+                                             dnnResourceFilter);
+
+    size_t filter_sizes[4] = {filter.dim_size(0), filter.dim_size(1),
+                              filter.dim_size(2), filter.dim_size(3)};
+    mkl_filter_output_mkl_shape.SetTfLayout(filter.dims(), filter_sizes,
+                                            mkl_context.filter_strides);
+
+    mkl_filter_output_mkl_shape.SetTfDimOrder(mkl_context.filter_dims,
+                                              data_format_);
+    mkl_filter_output_tf_shape.AddDim(
+        dnnLayoutGetMemorySize_F32(static_cast<dnnLayout_t>(
+            mkl_filter_output_mkl_shape.GetMklLayout())) /
+        sizeof(T));
+    AllocateOutputSetMklShape(context, 1, &mkl_context.output_filter,
+                              mkl_filter_output_tf_shape,
+                              mkl_filter_output_mkl_shape);
+
     mkl_context.conv_res[dnnResourceDst] =
         static_cast<void*>(output->flat<T>().data());
 
     mkl_context.MklCreateInputLayouts(context);
 
+    // Temp tensor used to allocate tmp buffers
     Tensor mkl_tmp_input_buf_tensor, mkl_tmp_filter_buf_tensor,
-        mkl_tmp_bias_buf_tensor;  // Temp tensor used to allocate tmp
-                                  // buffers
-    mkl_context.MklPrepareConvolutionInputs(context, &mkl_tmp_input_buf_tensor,
+        mkl_tmp_bias_buf_tensor;
+    mkl_context.MklPrepareConvolutionInputs(context,
+                                            &mkl_tmp_input_buf_tensor,
                                             &mkl_tmp_filter_buf_tensor,
                                             &mkl_tmp_bias_buf_tensor);
 
@@ -299,6 +325,7 @@ class MklConv2DOp : public OpKernel {
     dnnPrimitive_t prim_fwd;
     void* conv_res[dnnResourceNumber];
     dnnLayout_t lt_filter, lt_bias, lt_input;
+    Tensor* output_filter = nullptr;
 
     // Create MKL dnnLayout_t objects for tensors coming into the layer
     void MklCreateInputLayouts(OpKernelContext* context) {
@@ -353,9 +380,8 @@ class MklConv2DOp : public OpKernel {
       mkl_convert_input =
           !dnnLayoutCompare_F32(mkl_lt_internal_input, lt_input);
       if (mkl_convert_input) {
-        CHECK_EQ(dnnConversionCreate_F32(&mkl_prim_convert_input, lt_input,
-                                         mkl_lt_internal_input),
-                 E_SUCCESS);
+        CHECK_EQ(dnnConversionCreate_F32(&mkl_prim_convert_input,
+                 lt_input, mkl_lt_internal_input), E_SUCCESS);
         AllocTmpBuffer(context, mkl_tmp_input_buf_tensor, mkl_lt_internal_input,
                        &mkl_buf_convert_input);
         CHECK_EQ(dnnConversionExecute_F32(mkl_prim_convert_input, mkl_buf_input,
@@ -380,8 +406,10 @@ class MklConv2DOp : public OpKernel {
         CHECK_EQ(dnnConversionCreate_F32(&mkl_prim_convert_filter, lt_filter,
                                          mkl_lt_internal_filter),
                  E_SUCCESS);
-        AllocTmpBuffer(context, mkl_tmp_filter_buf_tensor,
-                       mkl_lt_internal_filter, &mkl_buf_convert_filter);
+
+        mkl_buf_convert_filter = const_cast<void*>(
+            static_cast<const void*>(output_filter->flat<T>().data()));
+
         CHECK_EQ(
             dnnConversionExecute_F32(mkl_prim_convert_filter, mkl_buf_filter,
                                      mkl_buf_convert_filter),

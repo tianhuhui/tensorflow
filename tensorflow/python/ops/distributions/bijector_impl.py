@@ -356,6 +356,9 @@ class Bijector(object):
       dtype: `tf.dtype` supported by this `Bijector`. `None` means dtype is not
         enforced.
       name: The name to give Ops created by the initializer.
+
+    Raises:
+      ValueError:  If a member of `graph_parents` is not a `Tensor`.
     """
     self._event_ndims = (
         ops.convert_to_tensor(event_ndims, dtype=dtypes.int32)
@@ -378,6 +381,10 @@ class Bijector(object):
         s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
         return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
       self._name = camel_to_snake(type(self).__name__.lstrip("_"))
+
+    for i, t in enumerate(self._graph_parents):
+      if t is None or not tensor_util.is_tensor(t):
+        raise ValueError("Graph parent item %d is not a Tensor; %s." % (i, t))
 
   @property
   def event_ndims(self):
@@ -586,7 +593,7 @@ class Bijector(object):
       except NotImplementedError as original_exception:
         try:
           x = mapping.x if mapping.x is not None else self._inverse(y, **kwargs)
-          ildj = self._inverse_log_det_jacobian(y, **kwargs)
+          ildj = -self._forward_log_det_jacobian(x, **kwargs)
         except NotImplementedError:
           raise original_exception
       mapping = mapping.merge(x=x, ildj=ildj)

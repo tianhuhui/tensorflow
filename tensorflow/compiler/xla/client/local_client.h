@@ -56,7 +56,7 @@ class ExecutableBuildOptions {
 
   // If set, this specifies the layout of the result of the computation. If not
   // set, the service will chose the layout of the result. A Shape is used to
-  // store the layout to accomodate tuple result shapes. A value of nullptr
+  // store the layout to accommodate tuple result shapes. A value of nullptr
   // indicates the option has not been set.
   ExecutableBuildOptions& set_result_layout(const Shape& shape_with_layout);
   const Shape* result_layout() const;
@@ -158,29 +158,24 @@ class LocalClient : public Client {
   LocalClient(const LocalClient&) = delete;
   void operator=(const LocalClient&) = delete;
 
-  // For an array of arguments held on the local service, validate
-  // that each is placed on the specified device_ordinal, and return
-  // the DeviceMemoryBase corresponding to each argument.
-  tensorflow::Status ResolveArguments(
-      const tensorflow::gtl::ArraySlice<const GlobalDataHandle*> arguments,
-      int device_ordinal,
-      std::vector<perftools::gputools::DeviceMemoryBase>* argument_ptrs);
-
-  // Return a handle to a buffer large enough to hold shape, allocated
-  // on device_ordinal on the local service. If
-  // allocate_space_for_deep_copy, the buffer is large enough to hold
-  // all sub-buffers of a tuple shape, otherwise it is only as large
-  // as the top-level tuple pointer array.
-  StatusOr<std::unique_ptr<GlobalData>> AllocateBufferOnDevice(
-      const Shape& shape, int device_ordinal,
-      bool allocate_space_for_deep_copy);
-
   // Build and return a LocalExecutable object. The executable is compiled using
   // the given argument layouts and options.
   StatusOr<std::unique_ptr<LocalExecutable>> Compile(
       const Computation& computation,
       const tensorflow::gtl::ArraySlice<const Shape*> argument_layouts,
       const ExecutableBuildOptions& options);
+
+  // Copy the literal data to the device with the given ordinal and return as a
+  // ScopedShapedBuffer. The given memory allocator is used for device memory
+  // allocation.
+  StatusOr<std::unique_ptr<ScopedShapedBuffer>> LiteralToShapedBuffer(
+      const Literal& literal, DeviceMemoryAllocator* allocator,
+      int device_ordinal);
+
+  // Copy the data from the device contained in the given ShapedBuffer and
+  // return as a Literal.
+  StatusOr<std::unique_ptr<Literal>> ShapedBufferToLiteral(
+      const ShapedBuffer& shaped_buffer);
 
   // Returns the platform that the underlying service targets.
   perftools::gputools::Platform* platform() const;

@@ -228,9 +228,10 @@ class TFExampleDecoderTest(test.TestCase):
     image_shape = (2, 3, 3)
     unused_image, serialized_example = self.GenerateImage(
         image_format='jpeg', image_shape=image_shape)
-    expected_regex = ('jpeg decoder can only be used to decode to tf.uint8 but '
-                      '.* was requested for a jpeg image.')
-    with self.assertRaisesRegexp(ValueError, expected_regex):
+    # decode_raw support uint16 now so ValueError will be thrown instead.
+    with self.assertRaisesRegexp(
+        ValueError,
+        'true_fn and false_fn must have the same type: uint16, uint8'):
       unused_decoded_image = self.RunDecodeExample(
           serialized_example,
           tfexample_decoder.Image(dtype=dtypes.uint16),

@@ -14,8 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 // See docs in ../ops/linalg_ops.cc.
-// TODO(konstantinos): Enable complex inputs. This will require additional tests
-//                     and OP_REQUIRES.
+
 #if GOOGLE_CUDA
 #define EIGEN_USE_GPU
 #endif  // GOOGLE_CUDA
@@ -65,11 +64,11 @@ class CholeskyOp : public LinearAlgebraOp<Scalar> {
         Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
         llt_decomposition(input);
 
-    // Output the lower triangular in a dense form.
-    outputs->at(0) = llt_decomposition.matrixL();
-
     OP_REQUIRES(context, llt_decomposition.info() == Eigen::Success,
                 errors::InvalidArgument(kErrMsg));
+
+    // Output the lower triangular in a dense form.
+    outputs->at(0) = llt_decomposition.matrixL();
   }
 };
 
@@ -77,16 +76,19 @@ class CholeskyOp : public LinearAlgebraOp<Scalar> {
 typedef Eigen::GpuDevice GPUDevice;
 
 namespace functor {
-#define DECLARE_GPU_SPEC(T)                                                  \
-  template <>                                                                \
-  void MatrixBandPart<GPUDevice, T>::Compute(                                \
-      const GPUDevice& d, Eigen::DenseIndex num_lower,                       \
-      Eigen::DenseIndex num_upper, typename TTypes<T, 3>::ConstTensor input, \
-      typename TTypes<T, 3>::Tensor output);                                 \
-  extern template struct MatrixBandPart<GPUDevice, T>;
+#define DECLARE_GPU_SPEC(T)                                            \
+  template <>                                                          \
+  struct MatrixBandPartFunctor<GPUDevice, T> {                         \
+    void operator()(OpKernelContext* context, const GPUDevice& device, \
+                    int num_upper_diags, int num_lower_diags,          \
+                    typename TTypes<T, 3>::ConstTensor input,          \
+                    typename TTypes<T, 3>::Tensor output);             \
+  };                                                                   \
+  extern template struct MatrixBandPartFunctor<GPUDevice, T>;
 
-TF_CALL_float(DECLARE_GPU_SPEC);
-TF_CALL_double(DECLARE_GPU_SPEC);
+TF_CALL_GPU_NUMBER_TYPES(DECLARE_GPU_SPEC);
+TF_CALL_complex64(DECLARE_GPU_SPEC);
+TF_CALL_complex128(DECLARE_GPU_SPEC);
 }  // namespace functor
 
 template <class Scalar>
@@ -130,9 +132,10 @@ class CholeskyOpGpu : public AsyncOpKernel {
     // before we launch each of the Cholesky factorization kernels in paralle.
     auto input_reshaped = input.template flat_inner_dims<Scalar, 3>();
     auto output_reshaped = output->template flat_inner_dims<Scalar, 3>();
-    functor::MatrixBandPart<GPUDevice, Scalar>::Compute(
-        context->eigen_device<GPUDevice>(), n, 0, input_reshaped,
-        output_reshaped);
+    functor::MatrixBandPartFunctor<GPUDevice, Scalar> band_part;
+    band_part(context, context->eigen_device<GPUDevice>(),
+              n /* num_lower_diags */, 0 /* num_upper_diags */, input_reshaped,
+              output_reshaped);
 
     // Launch a Cholesky kernel for each matrix in the batch.
     const int64 batch_size = input_reshaped.dimension(0);
@@ -151,7 +154,7 @@ class CholeskyOpGpu : public AsyncOpKernel {
     }
 
     // Register callback to check info after kernels finish.
-    auto info_checker = [context, done](
+    auto info_checker = [context, dev_info, done](
                             const Status& status,
                             const std::vector<HostLapackInfo>& /* unused */) {
       Status full_status = status;
@@ -171,11 +174,15 @@ class CholeskyOpGpu : public AsyncOpKernel {
 
 REGISTER_LINALG_OP_GPU("Cholesky", (CholeskyOpGpu<float>), float);
 REGISTER_LINALG_OP_GPU("Cholesky", (CholeskyOpGpu<double>), double);
+REGISTER_LINALG_OP_GPU("Cholesky", (CholeskyOpGpu<complex64>), complex64);
+REGISTER_LINALG_OP_GPU("Cholesky", (CholeskyOpGpu<complex128>), complex128);
 
 #endif  // GOOGLE_CUDA
 
 REGISTER_LINALG_OP("Cholesky", (CholeskyOp<float>), float);
 REGISTER_LINALG_OP("Cholesky", (CholeskyOp<double>), double);
+REGISTER_LINALG_OP("Cholesky", (CholeskyOp<complex64>), complex64);
+REGISTER_LINALG_OP("Cholesky", (CholeskyOp<complex128>), complex128);
 REGISTER_LINALG_OP("BatchCholesky", (CholeskyOp<float>), float);
 REGISTER_LINALG_OP("BatchCholesky", (CholeskyOp<double>), double);
 
